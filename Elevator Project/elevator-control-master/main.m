@@ -23,7 +23,7 @@ pickerAlg = @goodPicker;
 ITERATIONS = 50; % number of seconds to run through
 
 config.DELTA_T = 0.5; % seconds between updates (smaller means smoother but slower)
-config.CALL_FREQUENCY = 0.15; % average number of calls per second (between 0 and 1)
+%config.CALL_FREQUENCY = 0.15; % average number of calls per second (between 0 and 1)
 config.NUM_FLOORS = 3;
 config.NUM_CARS = 1;
 config.FLOOR_HEIGHT = 3; % m
@@ -31,6 +31,11 @@ config.BOARDING_TIME = 5; % time elevator doors stay open for boarding (s)
 config.MAX_VELOCITY = 10; % m/s
 config.ACCELERATION = 1.5; % m/s^2
 config.PLOT_SPEED = 5; % times faster to do the simulation (bigger is faster)
+config.SERIALPORT = "COM15";
+config.BAUD = 9600;
+
+% Assumptions
+prevCall = 1;
 
 % Some of the above constants will be changed by the GUI inputs. This
 % allows the user to run main.m directly or through the GUI.
@@ -88,12 +93,13 @@ for it = 1:config.DELTA_T:ITERATIONS
     
     msg(['--- t = ', num2str(it), ' ---']);
     
-    %% randomly make call
+    %% get call
     
     % Randomly decide if we should make a call, based on CALL_FREQUENCY.
     % Always make a call the first time through
-    if it == 1 || rand() < config.CALL_FREQUENCY * config.DELTA_T
-        call = makeRandCall(config.NUM_FLOORS);
+    % if it == 1 || rand() < config.CALL_FREQUENCY * config.DELTA_T
+        call = getCall(config.SERIALPORT, config.BAUD, prevCall);
+        prevCall = call.toFloor;
         numWaiting = numWaiting + 1;
         
         % The picker can't know the destination, just the direction (up/down).
@@ -117,9 +123,9 @@ for it = 1:config.DELTA_T:ITERATIONS
         passengers(end).responder = responder;
         passengers(end).pickedUp = false;
         passengers(end).droppedOff = false;
-    else
-        msg('No call made');
-    end
+    %else
+    %    msg('No call made');
+    %end
     
     %% update all elevator positions
     for icar = 1:config.NUM_CARS
