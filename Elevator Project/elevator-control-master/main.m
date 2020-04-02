@@ -98,8 +98,9 @@ for it = 1:config.DELTA_T:ITERATIONS
     % Randomly decide if we should make a call, based on CALL_FREQUENCY.
     % Always make a call the first time through
     % if it == 1 || rand() < config.CALL_FREQUENCY * config.DELTA_T
+    if it == 1 || call.toFloor == prevCall
         call = getCall(config.SERIALPORT, config.BAUD, prevCall);
-        prevCall = call.toFloor;
+        prevCall = call.fromFloor;
         numWaiting = numWaiting + 1;
         
         % The picker can't know the destination, just the direction (up/down).
@@ -123,6 +124,7 @@ for it = 1:config.DELTA_T:ITERATIONS
         passengers(end).responder = responder;
         passengers(end).pickedUp = false;
         passengers(end).droppedOff = false;
+    end
     %else
     %    msg('No call made');
     %end
