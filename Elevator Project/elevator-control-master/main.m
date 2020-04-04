@@ -1,6 +1,6 @@
 function main(handles)
 % main.m
-% 
+%
 % Controls overall functionality of the program.
 % This is meant to be run as a function through the elevatorTool GUI, but
 % it also works normally as a standalone by clicking "Run" and entering []
@@ -18,7 +18,7 @@ PLOTTING = true; % if true, display a plot of the car positions each iteration
 
 % which algorithm to test. Either naivePicker or goodPicker.
 % The @ sign is needed to create a function handle
-pickerAlg = @goodPicker; 
+pickerAlg = @goodPicker;
 
 ITERATIONS = 50; % number of seconds to run through
 
@@ -35,7 +35,7 @@ config.SERIALPORT = "COM15";
 config.BAUD = 9600;
 
 % Assumptions
-prevCall = 1;
+prevCall = config.FLOOR_HEIGHT;
 
 % Some of the above constants will be changed by the GUI inputs. This
 % allows the user to run main.m directly or through the GUI.
@@ -46,7 +46,7 @@ if ~isempty(handles)
     config.CALL_FREQUENCY = str2double(handles.callfrequencyEdit.String);
     config.FLOOR_HEIGHT = str2double(handles.floorheightEdit.String);
     ax = handles.elevatorAxes;
-    
+
     if handles.goodRadio.Value
         pickerAlg = @goodPicker;
     else
@@ -75,48 +75,42 @@ for icar = 1:config.NUM_CARS
     cars(icar).destinations = []; % Next floors this car wants to travel to.
                                   % First number goes first, and so on.
     cars(icar).timeRemaining = 0; % how long to wait before it can leave
-    
+
     msg(['Car ', num2str(icar), ' at y = ', num2str(cars(icar).y)]);
 end
 
 %% run simulation
 
 for it = 1:config.DELTA_T:ITERATIONS
-    %% clear the figure so we can put down the next positions
-    if PLOTTING && it ~= 1 || it == ITERATIONS
-        drawnow; %pause(config.DELTA_T / config.PLOT_SPEED);
-        cla(ax, 'reset');
-        if PLOTTING && ~isempty(handles) && it ~= 1
-            handles.tText.String = ['t = ', num2str(it)];
-        end
-    end
-    
+
     msg(['--- t = ', num2str(it), ' ---']);
-    
+
     %% get call
-    
+
     % Randomly decide if we should make a call, based on CALL_FREQUENCY.
     % Always make a call the first time through
     % if it == 1 || rand() < config.CALL_FREQUENCY * config.DELTA_T
-    if it == 1 || call.toFloor == prevCall
-        call = getCall(config.SERIALPORT, config.BAUD, prevCall);
-        prevCall = call.fromFloor;
+    call = getCall(config.SERIALPORT, config.BAUD, prevCall);
+    if call.toFloor ~= prevCall
+        prevCall = call.toFloor;
+        disp(call.fromFloor);
+        disp(prevCall);
         numWaiting = numWaiting + 1;
-        
+
         % The picker can't know the destination, just the direction (up/down).
         % This limitation keeps it more realistic.
         callSanitized.fromFloor = call.fromFloor;
         callSanitized.direction = call.direction;
-    
+
         [responder, scores] = pickerAlg(it, config, cars, callSanitized);
         cars(responder).destinations = [cars(responder).destinations, call.fromFloor];
         % TODO: let pickerAlg change the destination queue
-        
+
         msg(['new call from ', num2str(call.fromFloor*config.FLOOR_HEIGHT),...
             ' to ', num2str(call.toFloor*config.FLOOR_HEIGHT),...
             ', taken by car ', num2str(responder)]);
         msg(['Car scores: ', num2str(scores)]);
-        
+
         % add data to passengers struct array
         passengers(end+1).startTime = it;
         passengers(end).fromFloor = call.fromFloor;
@@ -124,21 +118,29 @@ for it = 1:config.DELTA_T:ITERATIONS
         passengers(end).responder = responder;
         passengers(end).pickedUp = false;
         passengers(end).droppedOff = false;
+
+     else
+       disp("No call made");
     end
-    %else
-    %    msg('No call made');
-    %end
-    
+
     %% update all elevator positions
     for icar = 1:config.NUM_CARS
+        % clear the figure so we can put down the next positions
+        if PLOTTING && it ~= 1 || it == ITERATIONS
+            drawnow; %pause(config.DELTA_T / config.PLOT_SPEED);
+            cla(ax, 'reset');
+            if PLOTTING && ~isempty(handles) && it ~= 1
+                handles.tText.String = ['t = ', num2str(it)];
+            end
+        end
         msg(['CAR ', num2str(icar), ':']);
-        
+
         % If the car still has to wait, don't call updateY. Instead,
         % decrement the time the car has to remain waiting
         if cars(icar).timeRemaining > 0
             msg(['  Waiting for ', num2str(cars(icar).timeRemaining), ' more second(s)']);
             cars(icar).timeRemaining = cars(icar).timeRemaining - config.DELTA_T;
-            
+
             % if that was the last waiting period, set the doors to close
             if cars(icar).timeRemaining == 0
                 cars(icar).doorsOpen = false;
@@ -152,10 +154,10 @@ for it = 1:config.DELTA_T:ITERATIONS
                     % improvement would be to modify the current
                     % destination if the car can still stop at a closer,
                     % and therefore more efficient, destination.
-                    
+
                     destinationsUp = cars(icar).destinations(deltaYs > 0);
                     destinationsDown = cars(icar).destinations(deltaYs < 0);
-                    
+
                     % Tiebreaker so we head in the direction of the current
                     % first destination if there are equal calls in both
                     % directions. If the first call is up, add 0.5 to the
@@ -163,7 +165,7 @@ for it = 1:config.DELTA_T:ITERATIONS
                     % calls up and down. Otherwise, 0.5 will be subtracted so
                     % destinationsDown will win in a tie.
                     tiebreaker = sign(deltaYs(1))/2;
-                    
+
                     if tiebreaker + length(destinationsUp) > length(destinationsDown) % heading up
                         cars(icar).destinations = ...
                             [sort(destinationsUp), sort(destinationsDown, 'descend')];
@@ -173,7 +175,7 @@ for it = 1:config.DELTA_T:ITERATIONS
                     end
                     % make deltaY with the new first destination
                     deltaY = cars(icar).destinations(1)*config.FLOOR_HEIGHT - cars(icar).y;
-                    
+
                     cars(icar).tLeave = it;
                     cars(icar).deltaYLeave = deltaY;
                 end
@@ -181,13 +183,13 @@ for it = 1:config.DELTA_T:ITERATIONS
             end
         end
         msg(['  at y = ', num2str(cars(icar).y)]);
-        
-        
+
+
         % if car is stopped at a floor that is a destination
         if cars(icar).velocity == 0 &&...
                 ismember(cars(icar).y, cars(icar).destinations * config.FLOOR_HEIGHT)
             msg(['  arrived at y = ', num2str(cars(icar).y)]);
-            
+
             % adjust the relevant passenger struct(s)
             % start at 2 because the first is empty
             for ipass = 2:length(passengers)
@@ -197,18 +199,18 @@ for it = 1:config.DELTA_T:ITERATIONS
                             passengers(ipass).responder == icar
                         numDroppedOff = numDroppedOff + 1;
                         numPickedUp = numPickedUp - 1;
-                        
+
                         passengers(ipass).droppedOff = true;
                         passengers(ipass).dropOffTime = it;
                         passengers(ipass).totalTime = it - passengers(ipass).startTime;
-                        
+
                         msg(['  dropped off passenger ', num2str(ipass-1),...
                             '. Total waiting time: ', num2str(passengers(ipass).totalTime)]);
-                        
+
                         % add new destination to queue and remove current floor
                         toFiltered = cars(icar).destinations ~= passengers(ipass).toFloor;
                         cars(icar).destinations = cars(icar).destinations(toFiltered);
-                        
+
                         cars(icar).timeRemaining = config.BOARDING_TIME;
                         cars(icar).doorsOpen = true;
                     end
@@ -217,54 +219,54 @@ for it = 1:config.DELTA_T:ITERATIONS
                             passengers(ipass).responder == icar
                         numPickedUp = numPickedUp + 1;
                         numWaiting = numWaiting - 1;
-                        
+
                         passengers(ipass).pickedUp = true;
                         passengers(ipass).pickUpTime = it;
                         passengers(ipass).pickUpCar = icar;
-                        
+
                         msg(['  picked up passenger ', num2str(ipass-1)]);
-                        
+
                         % add new destination to queue and remove current floor
                         fromFiltered = cars(icar).destinations ~= passengers(ipass).fromFloor;
                         cars(icar).destinations = [passengers(ipass).toFloor,...
                             cars(icar).destinations(fromFiltered)];
-                        
+
                         cars(icar).timeRemaining = config.BOARDING_TIME;
                         cars(icar).doorsOpen = true;
                     end
                 end
             end % end for
         end
-        
+
         msg(['  destinations: ', num2str(cars(icar).destinations * config.FLOOR_HEIGHT)]);
-        
+
         % always update the plot for the last iteration
         if PLOTTING || it == ITERATIONS
             % display each car's position as a rectangle on the plot
             width = 0.5;
             pos = [icar - width/2, cars(icar).y - config.FLOOR_HEIGHT,...
                 width, config.FLOOR_HEIGHT];
-            
+
             if cars(icar).doorsOpen
                 faceColor = [.4 .6 .6]; % darker blue
             else
                 faceColor = [.65 .85 .9]; % light blue
             end
-            
+
             rectangle(ax, 'Position', pos, 'FaceColor', faceColor);
         end
         heights(icar) = cars(icar).y;
     end
-    
+
     %% plot car destinations
-    
+
     % display every call on the plot to show each car's destination(s)
-    if PLOTTING || it == ITERATIONS        
+    if PLOTTING || it == ITERATIONS
         yyaxis(ax, 'right');
         % on the right y-axis, display floor numbers
         ylim(ax, [0.5, config.NUM_FLOORS + 0.5]);
         hold(ax, 'on');
-        
+
         for ipass = 2:length(passengers)
             pass = passengers(ipass);
             if ~pass.droppedOff
@@ -282,7 +284,7 @@ for it = 1:config.DELTA_T:ITERATIONS
                     marker = 'square';
                     y = pass.toFloor;
                 end
-                
+
                 plot(ax, pass.responder, y,...
                     'Marker', marker,...
                     'MarkerSize', 10,...
@@ -291,11 +293,11 @@ for it = 1:config.DELTA_T:ITERATIONS
                     );
             end
         end
-        
+
         hold(ax, 'off');
         ax.YTick = 1:config.NUM_FLOORS;
         ylabel(ax, 'Floor number');
-        
+
         yyaxis(ax, 'left');
         axis(ax, [0.5, config.NUM_CARS+0.5, 0, config.FLOOR_HEIGHT*config.NUM_FLOORS]);
         ylabel(ax, 'Height (m)');
@@ -303,8 +305,8 @@ for it = 1:config.DELTA_T:ITERATIONS
         ax.YTick = 0 : config.FLOOR_HEIGHT : config.FLOOR_HEIGHT*config.NUM_FLOORS;
         ax.XTick = 1:config.NUM_CARS; % force plot to display only integers
         grid(ax, 'on'); % display only y (horizontal) gridlines
-        
-        %drawnow;
+
+        % drawnow;
     end
 end
 
@@ -362,7 +364,7 @@ if ~isempty(handles)
     end
     handles.statsTable.Data = stats;
 %     handles.runButton.String = 'Run simulation';
-    
+
     ax = handles.histogramAxes;
 else
     figure(2);

@@ -3,7 +3,7 @@ function varargout = elevatorTool(varargin)
 %      ELEVATORTOOL, by itself, creates a new ELEVATORTOOL or raises the existing
 %      singleton*.
 %
-%      H = ELEVATORTOOL returns the handle to a new ELEVATORTOOL or the handle to
+%      H = ELEVATORTOOL returns the handle to a new ELEVATORTO  OL or the handle to
 %      the existing singleton*.
 %
 %      ELEVATORTOOL('CALLBACK',hObject,eventData,handles,...) calls the local
@@ -83,7 +83,7 @@ hObject.Enable = 'off';
 main(handles);
 hObject.Enable = 'on';
 
-% --- Executes on button press in plottingCheck.
+% --- Executes on button press in plottingCheck.Z
 function plottingCheck_Callback(hObject, eventdata, handles)
 % hObject    handle to plottingCheck (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
